@@ -1,0 +1,59 @@
+#############################
+# GuardianEye .gitignore
+#############################
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# IDE/editor
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Ultralytics / training artifacts
+runs/
+wandb/
+
+# Outputs (regenerate via inference)
+outputs/
+
+# Intermediate caches
+datasets/**/labels.cache
+datasets/**/labels.cache.npy
+
+# Large raw videos (store externally or use LFS)
+data/videos/*
+!data/videos/.keep
+
+# Model weights (store externally or via release). Allow curated exports in models/
+*.pt
+*.onnx
+!models/best.pt
+!models/best.onnx
+
+# Keep dataset config
+!datasets/guardian/data.yaml
+
+# Annotated videos
+annotated_*.mp4
+
+# Temporary
+*.tmp
+*.bak
+~*

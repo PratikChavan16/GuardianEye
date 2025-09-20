@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 9
+names: ['Ambulance', 'Bike', 'Bus', 'Car', 'Rickshaw', 'Truck', 'Van', 'numberplate', 'objects']
+
+roboflow:
+  workspace: guardianeye-tcpcp
+  project: guardianeye-wdu4u
+  version: 2
+  license: Private
+  url: https://app.roboflow.com/guardianeye-tcpcp/guardianeye-wdu4u/2
