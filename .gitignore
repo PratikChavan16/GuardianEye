@@ -33,6 +33,11 @@ wandb/
 # Outputs (regenerate via inference)
 outputs/
 
+# Backend runtime artifacts
+backend/uploads/
+backend/results/
+backend/logs/
+
 # Intermediate caches
 datasets/**/labels.cache
 datasets/**/labels.cache.npy

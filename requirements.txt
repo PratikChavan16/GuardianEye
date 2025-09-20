@@ -1,3 +1,7 @@
 ultralytics==8.3.202
 opencv-python
 numpy
+fastapi==0.116.2
+uvicorn==0.36.0
+python-multipart==0.0.20
+aiofiles==24.1.0
