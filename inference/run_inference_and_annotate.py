@@ -51,7 +51,16 @@ def main(args):
     # get class names from model (Ultralytics model.names)
     names = model.names if hasattr(model, 'names') else {}
 
-    print("Starting inference on", args.source)
+    max_frames_env = os.getenv("GUARDIAN_MAX_FRAMES")
+    max_frames = None
+    if max_frames_env:
+        try:
+            max_frames = int(max_frames_env)
+            print(f"Limiting to max {max_frames} frames via GUARDIAN_MAX_FRAMES")
+        except ValueError:
+            print("Invalid GUARDIAN_MAX_FRAMES value, ignoring")
+
+    print("Starting inference on", args.source, "imgsz=", args.imgsz)
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -84,7 +93,10 @@ def main(args):
 
         frame_idx += 1
         # optionally print progress
-        if frame_idx % 100 == 0:
+        if max_frames is not None and frame_idx >= max_frames:
+            print(f"Reached max frame limit {max_frames}; stopping early.")
+            break
+        if frame_idx % 100 == 0 and frame_idx > 0:
             elapsed = time.time() - start_time
             print(f"Processed {frame_idx} frames, {elapsed:.1f}s elapsed")
 
@@ -101,7 +113,7 @@ if __name__ == "__main__":
     p.add_argument("--source", required=True)
     p.add_argument("--out_video", required=True)
     p.add_argument("--out_json", required=True)
-    p.add_argument("--imgsz", type=int, default=1280)
+    p.add_argument("--imgsz", type=int, default=640)
     p.add_argument("--conf", type=float, default=0.35)
     p.add_argument("--camera_id", default="video1")
     args = p.parse_args()

@@ -1,7 +1,22 @@
-ultralytics==8.3.202
-opencv-python
-numpy
-fastapi==0.116.2
-uvicorn==0.36.0
-python-multipart==0.0.20
-aiofiles==24.1.0
+# GuardianEye Traffic Optimization System Requirements
+
+# Core ML and Computer Vision
+ultralytics==8.3.202      # YOLOv8 object detection
+opencv-python              # Computer vision operations
+numpy                      # Numerical operations
+
+# Web API Framework
+fastapi==0.116.2           # Modern web API framework
+uvicorn==0.36.0           # ASGI server
+python-multipart==0.0.20  # File upload support
+aiofiles==24.1.0          # Async file operations
+
+# Vehicle Tracking
+deep-sort-realtime        # DeepSORT tracking algorithm
+
+# Additional Dependencies (install if needed)
+# torch                   # PyTorch (if using GPU acceleration)
+# torchvision            # Computer vision models
+# scipy                  # Scientific computing
+# matplotlib             # Plotting and visualization
+# pandas                 # Data manipulation
