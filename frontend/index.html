@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuardianEye ATCS - Traffic Signal Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .signal-map {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+        .junction-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .junction-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .junction-card.green {
+            border-left-color: #28a745;
+        }
+        .junction-card.red {
+            border-left-color: #dc3545;
+        }
+        .countdown {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .error {
+            color: #dc3545;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GuardianEye V1 - 6 Junction Dynamic Signals</h1>
+        
+        <div class="controls">
+            <button onclick="fetchSignalPlan()">Refresh Signal Plan</button>
+            <button onclick="toggleSimulation()" id="simBtn">Start Simulation</button>
+            <button onclick="showMappingInterface()" id="mapBtn">Manage Junction Mappings</button>
+            <button onclick="showHistoricalCharts()" id="chartBtn">Historical Trends</button>
+            <button onclick="showUploadPanel()" id="uploadBtn">Upload Videos</button>
+        </div>
+
+        <!-- Mapping Interface (initially hidden) -->
+        <div id="mappingInterface" style="display: none; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <h3>Current Junction Mappings</h3>
+            <p style="margin-top:-10px; color:#555; font-size:0.9em;">Mappings are created automatically after each upload finishes processing. You can review or delete them here.</p>
+            <div id="currentMappings" style="background: white; padding: 15px; border-radius: 5px; min-height: 100px;">
+                <!-- Current mappings will be displayed here -->
+            </div>
+            <button onclick="hideMappingInterface()" style="margin-top: 15px; background: #6c757d;">Close</button>
+        </div>
+
+        <!-- Historical Charts Interface (initially hidden) -->
+        <div id="historicalCharts" style="display: none; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <h3>Historical Demand Trends</h3>
+            <div style="margin-bottom: 15px;">
+                <label><strong>Time Range:</strong></label>
+                <select id="timeRange" onchange="loadHistoricalData()" style="margin-left: 10px; padding: 5px;">
+                    <option value="1">Last 1 Hour</option>
+                    <option value="6">Last 6 Hours</option>
+                    <option value="24" selected>Last 24 Hours</option>
+                    <option value="168">Last Week</option>
+                </select>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h4>Total Demand Over Time</h4>
+                    <canvas id="demandChart" width="400" height="200" style="border: 1px solid #ddd; background: white;"></canvas>
+                </div>
+                <div>
+                    <h4>Junction Demand Comparison</h4>
+                    <canvas id="junctionChart" width="400" height="200" style="border: 1px solid #ddd; background: white;"></canvas>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h4>Statistics</h4>
+                <div id="chartStats" style="background: white; padding: 15px; border-radius: 5px;">
+                    <!-- Statistics will be displayed here -->
+                </div>
+            </div>
+            
+            <button onclick="hideHistoricalCharts()" style="margin-top: 15px; background: #6c757d;">Close</button>
+        </div>
+
+        <!-- Upload & Auto-Mapping Interface (initially hidden) -->
+        <div id="uploadPanel" style="display: none; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <h3>Upload & Automatically Map Videos</h3>
+            <p style="margin-top:-10px; color:#555; font-size:0.9em;">Choose a junction and video. When processing is done the system maps stats and refreshes the plan automatically.</p>
+            <div style="display:grid; grid-template-columns: 1fr 1fr auto; gap:15px; align-items:end;">
+                <div>
+                    <label><strong>Junction</strong></label>
+                    <select id="uploadJunctionSelect" style="width:100%; padding:8px; margin-top:5px;"></select>
+                </div>
+                <div>
+                    <label><strong>Video File</strong></label>
+                    <input type="file" id="videoFileInput" accept="video/*" style="width:100%; padding:6px; margin-top:5px;" />
+                </div>
+                <div>
+                    <button onclick="startUpload()" style="padding:10px 18px;">Upload & Process</button>
+                </div>
+            </div>
+            <div id="uploadStatus" style="margin-top:20px; background:white; padding:12px; border-radius:6px; font-size:0.9em; min-height:60px;">
+                <em>No uploads yet.</em>
+            </div>
+            <button onclick="hideUploadPanel()" style="margin-top:15px; background:#6c757d;">Close</button>
+        </div>
+
+        <svg id="signalMap" class="signal-map" width="800" height="600">
+            <!-- Junction map will be rendered here -->
+        </svg>
+
+        <div class="status" id="statusDiv">
+            <strong>Status:</strong> <span id="statusText">Ready</span><br>
+            <strong>Total Demand:</strong> <span id="totalDemand">0</span> vehicles/min
+            <span id="lastUpdated" style="float: right; color: #666; font-size: 0.9em;"></span>
+        </div>
+
+        <div class="junction-info" id="junctionInfo">
+            <!-- Junction cards will be rendered here -->
+        </div>
+        
+        <!-- Live Analysis Panel (initially hidden) -->
+        <div id="liveAnalysisPanel" style="display:none; margin-top:30px; padding:20px; background:#f0f7ff; border:1px solid #cfe2ff; border-radius:8px;">
+            <h3 style="margin-top:0;">Live Analysis (Real-Time Processing)</h3>
+            <p style="margin-top:-10px; color:#555; font-size:0.9em;">Upload a video to see frame-by-frame detection progress in real-time, then view the final annotated result and statistics.</p>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px; align-items:start;">
+                <div>
+                    <label style="font-weight:bold;">Video File</label><br>
+                    <input type="file" id="liveVideoInput" accept="video/*" style="margin-top:6px; padding:6px; width:100%;" />
+                    <div style="margin-top:10px;">
+                        <button id="liveUploadBtn" onclick="startLiveAnalysisUpload()" style="padding:8px 16px;">Upload & Analyze Live</button>
+                        <button id="liveCancelBtn" onclick="cancelLiveAnalysis()" style="padding:8px 16px; background:#6c757d; display:none;">Cancel</button>
+                    </div>
+                    <div id="liveStatus" style="margin-top:15px; background:white; border:1px solid #ddd; padding:10px; min-height:70px; font-size:0.9em;">
+                        <em>No live analysis started.</em>
+                    </div>
+                    
+                    <!-- Live Frame Preview -->
+                    <div id="liveFramePreview" style="display:none; margin-top:15px; background:#f8f9fa; border:1px solid #ddd; border-radius:6px; padding:10px;">
+                        <h5 style="margin:0 0 8px 0;">Live Processing Preview</h5>
+                        <canvas id="liveFrameCanvas" width="300" height="180" style="width:100%; max-width:300px; border:1px solid #ccc; background:#000;"></canvas>
+                        <div id="liveFrameInfo" style="font-size:0.8em; color:#666; margin-top:4px;">Frame preview will show here during processing</div>
+                    </div>
+                </div>
+                <div>
+                    <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:6px;">
+                        <video id="liveAnnotatedVideo" style="width:100%; max-height:320px; background:#000;" controls></video>
+                        <div id="liveVideoNote" style="font-size:0.75em; color:#666; margin-top:4px;">Final annotated video appears once processing completes.</div>
+                    </div>
+                    <div style="margin-top:15px; background:#fff; border:1px solid #ddd; border-radius:6px; padding:12px;">
+                        <h4 style="margin:0 0 10px 0;">Live Statistics</h4>
+                        <div id="liveStats"><em>No stats yet.</em></div>
+                        <div style="margin-top:12px;">
+                            <h5 style="margin:0 0 6px 0; font-size:0.85em; color:#333;">Counts Over Time (simplified)</h5>
+                            <canvas id="liveCountsChart" width="430" height="130" style="width:100%; border:1px solid #ccc; background:#fafafa;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Real-Time Stream Panel (initially hidden) -->
+        <div id="realTimePanel" style="display:none; margin-top:30px; padding:20px; background:#eef9f0; border:1px solid #c7ead2; border-radius:8px;">
+            <h3 style="margin-top:0;">Real-Time Stream (Continuous Detection)</h3>
+            <p style="margin-top:-10px; color:#555; font-size:0.9em;">Start a live camera or file-based stream and receive rolling detection stats & annotated frames with sub-second updates.</p>
+            <div style="display:grid; grid-template-columns: 280px 1fr; gap:25px; align-items:start;">
+                <div>
+                    <label style="font-weight:bold;">Source</label>
+                    <select id="rtSource" style="width:100%; padding:6px; margin-top:6px;">
+                        <option value="0" selected>Webcam (0)</option>
+                    </select>
+                    <label style="font-weight:bold; margin-top:12px; display:block;">Confidence</label>
+                    <input type="number" id="rtConfidence" value="0.35" min="0.05" max="0.95" step="0.05" style="width:100%; padding:6px;" />
+                    <label style="font-weight:bold; margin-top:12px; display:block;">Performance</label>
+                    <select id="rtPerformance" style="width:100%; padding:6px;">
+                        <option value="fast" selected>Fast (skip 2, 320px)</option>
+                        <option value="balanced">Balanced (skip 1, 640px)</option>
+                        <option value="quality">Quality (no skip, 1280px)</option>
+                    </select>
+                    <label style="font-weight:bold; margin-top:12px; display:block;">Live Junction (Optimizer)</label>
+                    <select id="rtJunction" style="width:100%; padding:6px;">
+                        <option value="" selected>No live optimization</option>
+                        <option value="J1">J1</option>
+                        <option value="J2">J2</option>
+                        <option value="J3">J3</option>
+                        <option value="J4">J4</option>
+                        <option value="J5">J5</option>
+                        <option value="J6">J6</option>
+                    </select>
+                    <div style="margin-top:12px;">
+                        <button id="rtStartBtn" onclick="startRealTimeStream()" style="padding:8px 14px;">Start Stream</button>
+                        <button id="rtStopBtn" onclick="stopRealTimeStream()" style="padding:8px 14px; background:#6c757d; display:none;">Stop</button>
+                    </div>
+                    <div id="rtStatus" style="margin-top:15px; background:white; border:1px solid #ddd; padding:10px; min-height:60px; font-size:0.85em;">
+                        <em>No active stream.</em>
+                    </div>
+                    <div style="margin-top:15px; background:#fff; border:1px solid #ddd; border-radius:6px; padding:10px;">
+                        <h4 style="margin:0 0 8px 0;">Rolling Stats (≈60s)</h4>
+                        <div id="rtStats" style="font-size:0.85em;">
+                            <em>—</em>
+                        </div>
+                        <canvas id="rtSpark" width="240" height="80" style="margin-top:10px; width:100%; background:#fafafa; border:1px solid #ccc;"></canvas>
+                    </div>
+                </div>
+                <div>
+                    <div style="background:#fff; border:1px solid #ddd; border-radius:6px; padding:8px;">
+                        <img id="rtImage" style="width:100%; max-height:420px; background:#000; object-fit:contain;" alt="Live annotated stream" />
+                        <div style="font-size:0.7em; color:#666; margin-top:4px;">MJPEG annotated frame stream. Updates ~10 fps (frame skipping may apply).</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CYCLE_TIME = 90;
+        let junctions = [];
+        let signalPlan = {};
+        let demandValues = {};
+        let timeLeft = {};
+        let simulationInterval = null;
+        let isSimulating = false;
+
+        // Load junction configuration
+        async function loadJunctions() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/junctions');
+                if(!response.ok) throw new Error('HTTP '+response.status);
+                const data = await response.json();
+                junctions = data.junctions || [];
+                renderMap();
+            } catch (error) {
+                console.error('Error loading junctions:', error);
+                document.getElementById('statusText').textContent = 'Error loading junction config';
+            }
+        }
+
+        // Fetch signal plan from backend
+        async function fetchSignalPlan() {
+            try {
+                document.getElementById('statusText').textContent = 'Fetching signal plan...';
+                const response = await fetch('http://127.0.0.1:8000/optimizer/plan');
+                const data = await response.json();
+                
+                // Handle new response format with demands
+                if (data.greens) {
+                    signalPlan = data.greens;
+                    demandValues = data.demands || {};
+                    
+                    // Update total demand display
+                    const totalDemand = data.total_demand || 0;
+                    document.getElementById('totalDemand').textContent = totalDemand.toFixed(1);
+                    
+                    // Update timestamp
+                    if (data.timestamp) {
+                        const lastUpdated = new Date(data.timestamp * 1000).toLocaleTimeString();
+                        document.getElementById('lastUpdated').textContent = `Last updated: ${lastUpdated}`;
+                    }
+                    
+                    if (data.fallback) {
+                        document.getElementById('statusText').textContent = 'Signal plan updated (using fallback data)';
+                    } else {
+                        document.getElementById('statusText').textContent = 'Signal plan updated from mapped data';
+                    }
+                } else {
+                    // Fallback for old format
+                    signalPlan = data;
+                    demandValues = {};
+                    document.getElementById('statusText').textContent = 'Signal plan updated (legacy format)';
+                }
+                
+                // Initialize timers
+                Object.entries(signalPlan).forEach(([jid, green]) => {
+                    timeLeft[jid] = Math.round(green);
+                });
+                
+                renderJunctionInfo();
+                updateMapColors();
+            } catch (error) {
+                console.error('Error fetching signal plan:', error);
+                document.getElementById('statusText').textContent = 'Error: Backend not available';
+            }
+        }
+
+        // Render SVG map
+        function renderMap() {
+            const svg = document.getElementById('signalMap');
+            svg.innerHTML = '';
+
+            // Draw connections first (so they appear behind junctions)
+            junctions.forEach(j => {
+                j.neighbors.forEach(nb => {
+                    const target = junctions.find(jj => jj.id === nb.to);
+                    if (target) {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', j.x);
+                        line.setAttribute('y1', j.y);
+                        line.setAttribute('x2', target.x);
+                        line.setAttribute('y2', target.y);
+                        line.setAttribute('stroke', '#999');
+                        line.setAttribute('stroke-width', '2');
+                        svg.appendChild(line);
+                    }
+                });
+            });
+
+            // Draw junctions
+            junctions.forEach(j => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', j.x);
+                circle.setAttribute('cy', j.y);
+                circle.setAttribute('r', '25');
+                circle.setAttribute('fill', 'gray');
+                circle.setAttribute('stroke', 'black');
+                circle.setAttribute('stroke-width', '2');
+                circle.setAttribute('id', `junction-${j.id}`);
+                
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', j.x);
+                text.setAttribute('y', j.y + 40);
+                text.setAttribute('font-size', '12');
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('id', `text-${j.id}`);
+                text.textContent = `${j.id} (0s)`;
+                
+                g.appendChild(circle);
+                g.appendChild(text);
+                svg.appendChild(g);
+            });
+        }
+
+        // Update junction colors and text
+        function updateMapColors() {
+            junctions.forEach(j => {
+                const circle = document.getElementById(`junction-${j.id}`);
+                const text = document.getElementById(`text-${j.id}`);
+                
+                if (circle && text) {
+                    const time = timeLeft[j.id] || 0;
+                    const greenTime = signalPlan[j.id] || 0;
+                    
+                    // Green if within green time, red otherwise
+                    const isGreen = time > (CYCLE_TIME - greenTime);
+                    circle.setAttribute('fill', isGreen ? '#28a745' : '#dc3545');
+                    text.textContent = `${j.id} (${time}s)`;
+                }
+            });
+        }
+
+        // Render junction information cards
+        function renderJunctionInfo() {
+            const container = document.getElementById('junctionInfo');
+            container.innerHTML = '';
+
+            junctions.forEach(j => {
+                const time = timeLeft[j.id] || 0;
+                const greenTime = signalPlan[j.id] || 0;
+                const demand = demandValues[j.id] || 0;
+                const isGreen = time > (CYCLE_TIME - greenTime);
+
+                const card = document.createElement('div');
+                card.className = `junction-card ${isGreen ? 'green' : 'red'}`;
+                card.innerHTML = `
+                    <h3>Junction ${j.id}</h3>
+                    <div class="countdown" style="color: ${isGreen ? '#28a745' : '#dc3545'}">
+                        ${time}s
+                    </div>
+                    <p><strong>Green Time:</strong> ${greenTime}s</p>
+                    <p><strong>Phase:</strong> ${isGreen ? 'GREEN' : 'RED'}</p>
+                    <p><strong>Demand:</strong> ${demand.toFixed(1)} vehicles/min</p>
+                    <p><strong>Neighbors:</strong> ${j.neighbors.map(n => n.to).join(', ')}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Toggle simulation
+        function toggleSimulation() {
+            const btn = document.getElementById('simBtn');
+            
+            if (isSimulating) {
+                clearInterval(simulationInterval);
+                isSimulating = false;
+                btn.textContent = 'Start Simulation';
+                document.getElementById('statusText').textContent = 'Simulation stopped';
+            } else {
+                simulationInterval = setInterval(() => {
+                    // Countdown
+                    Object.keys(timeLeft).forEach(jid => {
+                        timeLeft[jid] = Math.max(0, timeLeft[jid] - 1);
+                        if (timeLeft[jid] === 0) {
+                            timeLeft[jid] = CYCLE_TIME; // Reset cycle
+                        }
+                    });
+                    
+                    updateMapColors();
+                    renderJunctionInfo();
+                }, 1000);
+                
+                isSimulating = true;
+                btn.textContent = 'Stop Simulation';
+                document.getElementById('statusText').textContent = 'Simulation running';
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadJunctions();
+            // populateJunctionSelect removed (auto mapping only)
+            // Auto-fetch signal plan every 30 seconds
+            fetchSignalPlan();
+            setInterval(fetchSignalPlan, 30000);
+        });
+
+        // Historical Charts Functions
+        function showHistoricalCharts() {
+            document.getElementById('historicalCharts').style.display = 'block';
+            loadHistoricalData();
+        }
+
+        function hideHistoricalCharts() {
+            document.getElementById('historicalCharts').style.display = 'none';
+        }
+
+        async function loadHistoricalData() {
+            const timeRange = document.getElementById('timeRange').value;
+            
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/historical_data?hours=${timeRange}`);
+                const data = await response.json();
+                
+                if (data.history && data.history.length > 0) {
+                    drawDemandChart(data.history);
+                    drawJunctionChart(data.history);
+                    displayChartStats(data.history);
+                } else {
+                    // Show no data message
+                    const demandCanvas = document.getElementById('demandChart');
+                    const ctx = demandCanvas.getContext('2d');
+                    ctx.clearRect(0, 0, demandCanvas.width, demandCanvas.height);
+                    ctx.fillStyle = '#666';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('No historical data available', demandCanvas.width/2, demandCanvas.height/2);
+                    
+                    document.getElementById('chartStats').innerHTML = '<p style="color: #666; font-style: italic;">No data available for the selected time range.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading historical data:', error);
+                document.getElementById('chartStats').innerHTML = '<p style="color: #dc3545;">Error loading historical data</p>';
+            }
+        }
+
+        function drawDemandChart(history) {
+            const canvas = document.getElementById('demandChart');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (history.length === 0) return;
+            
+            // Prepare data
+            const data = history.map(h => ({
+                time: new Date(h.timestamp * 1000),
+                demand: h.total_demand || 0
+            }));
+            
+            // Find min/max for scaling
+            const maxDemand = Math.max(...data.map(d => d.demand));
+            const minTime = Math.min(...data.map(d => d.time.getTime()));
+            const maxTime = Math.max(...data.map(d => d.time.getTime()));
+            
+            // Draw axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(50, 20);
+            ctx.lineTo(50, 180);
+            ctx.lineTo(380, 180);
+            ctx.stroke();
+            
+            // Draw data line
+            ctx.strokeStyle = '#007bff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            data.forEach((point, index) => {
+                const x = 50 + ((point.time.getTime() - minTime) / (maxTime - minTime)) * 330;
+                const y = 180 - (point.demand / (maxDemand || 1)) * 160;
+                
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+            
+            // Draw points
+            ctx.fillStyle = '#007bff';
+            data.forEach(point => {
+                const x = 50 + ((point.time.getTime() - minTime) / (maxTime - minTime)) * 330;
+                const y = 180 - (point.demand / (maxDemand || 1)) * 160;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+            
+            // Add labels
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Time', canvas.width/2, canvas.height - 5);
+            
+            ctx.save();
+            ctx.translate(15, canvas.height/2);
+            ctx.rotate(-Math.PI/2);
+            ctx.fillText('Total Demand (vehicles/min)', 0, 0);
+            ctx.restore();
+            
+            // Y-axis labels
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 4; i++) {
+                const y = 180 - (i/4) * 160;
+                const value = (i/4) * (maxDemand || 1);
+                ctx.fillText(value.toFixed(1), 45, y + 4);
+            }
+        }
+
+        function drawJunctionChart(history) {
+            const canvas = document.getElementById('junctionChart');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (history.length === 0) return;
+            
+            // Calculate average demand per junction
+            const junctionTotals = {};
+            const junctionCounts = {};
+            
+            history.forEach(h => {
+                Object.entries(h.demands || {}).forEach(([junction, demand]) => {
+                    junctionTotals[junction] = (junctionTotals[junction] || 0) + demand;
+                    junctionCounts[junction] = (junctionCounts[junction] || 0) + 1;
+                });
+            });
+            
+            const junctionAverages = Object.entries(junctionTotals).map(([junction, total]) => ({
+                junction,
+                avgDemand: total / (junctionCounts[junction] || 1)
+            }));
+            
+            // Draw bar chart
+            const barWidth = 50;
+            const spacing = 55;
+            const maxAvg = Math.max(...junctionAverages.map(j => j.avgDemand));
+            
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            
+            junctionAverages.forEach((item, index) => {
+                const x = 50 + index * spacing;
+                const barHeight = (item.avgDemand / (maxAvg || 1)) * 140;
+                const y = 160 - barHeight;
+                
+                // Draw bar
+                ctx.fillStyle = '#28a745';
+                ctx.fillRect(x, y, barWidth, barHeight);
+                
+                // Draw junction label
+                ctx.fillStyle = '#333';
+                ctx.fillText(item.junction, x + barWidth/2, 180);
+                
+                // Draw value label
+                ctx.fillText(item.avgDemand.toFixed(1), x + barWidth/2, y - 5);
+            });
+            
+            // Y-axis
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(40, 20);
+            ctx.lineTo(40, 160);
+            ctx.stroke();
+            
+            // Title
+            ctx.fillStyle = '#333';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Average Demand by Junction', canvas.width/2, 15);
+        }
+
+        function displayChartStats(history) {
+            const container = document.getElementById('chartStats');
+            
+            if (history.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No data available</p>';
+                return;
+            }
+            
+            // Calculate statistics
+            const totalDemands = history.map(h => h.total_demand || 0);
+            const avgTotalDemand = totalDemands.reduce((a, b) => a + b, 0) / totalDemands.length;
+            const maxTotalDemand = Math.max(...totalDemands);
+            const minTotalDemand = Math.min(...totalDemands);
+            
+            // Most recent data
+            const latest = history[history.length - 1];
+            const latestTime = new Date(latest.timestamp * 1000).toLocaleString();
+            
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div>
+                        <strong>Data Points:</strong> ${history.length}<br>
+                        <strong>Time Range:</strong> ${new Date(history[0].timestamp * 1000).toLocaleString()} to ${latestTime}
+                    </div>
+                    <div>
+                        <strong>Average Total Demand:</strong> ${avgTotalDemand.toFixed(1)} v/min<br>
+                        <strong>Peak Demand:</strong> ${maxTotalDemand.toFixed(1)} v/min<br>
+                        <strong>Minimum Demand:</strong> ${minTotalDemand.toFixed(1)} v/min
+                    </div>
+                    <div>
+                        <strong>Current Total Demand:</strong> ${(latest.total_demand || 0).toFixed(1)} v/min<br>
+                        <strong>Most Active Junction:</strong> ${getMostActiveJunction(latest.demands || {})}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getMostActiveJunction(demands) {
+            const entries = Object.entries(demands);
+            if (entries.length === 0) return 'N/A';
+            
+            const [junction, demand] = entries.reduce((max, current) => 
+                current[1] > max[1] ? current : max
+            );
+            
+            return `${junction} (${demand.toFixed(1)} v/min)`;
+        }
+
+        // Upload & Auto-Mapping Functions
+        let activeUploads = {}; // uid -> { junction, filename, status, statsPath }
+
+        function showUploadPanel() {
+            document.getElementById('uploadPanel').style.display = 'block';
+            populateUploadJunctionSelect();
+        }
+
+        function hideUploadPanel() {
+            document.getElementById('uploadPanel').style.display = 'none';
+        }
+
+        function populateUploadJunctionSelect() {
+            const sel = document.getElementById('uploadJunctionSelect');
+            sel.innerHTML = '';
+            junctions.forEach(j => {
+                const o = document.createElement('option');
+                o.value = j.id;
+                o.textContent = j.id;
+                sel.appendChild(o);
+            });
+        }
+
+        async function startUpload() {
+            const fileInput = document.getElementById('videoFileInput');
+            const junction = document.getElementById('uploadJunctionSelect').value;
+            if (!fileInput.files.length) { alert('Select a video file first'); return; }
+            const file = fileInput.files[0];
+            const form = new FormData();
+            form.append('file', file);
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.innerHTML = `<div>Uploading <strong>${file.name}</strong> for junction <strong>${junction}</strong>...</div>`;
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/upload', { method: 'POST', body: form });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Upload failed');
+                const uid = data.uid;
+                activeUploads[uid] = { junction, filename: file.name, status: 'processing', statsPath: data.stats_json };
+                appendUploadLine(uid, `Processing started (uid=${uid})`);
+                pollStatus(uid);
+                fileInput.value = '';
+            } catch (err) {
+                statusDiv.innerHTML += `<div style='color:#c00;'>Error: ${err.message}</div>`;
+            }
+        }
+
+        function appendUploadLine(uid, text) {
+            const statusDiv = document.getElementById('uploadStatus');
+            const lineId = 'upload-' + uid;
+            let el = document.getElementById(lineId);
+            if (!el) {
+                el = document.createElement('div');
+                el.id = lineId;
+                statusDiv.appendChild(el);
+            }
+            el.innerHTML = text;
+        }
+
+        async function pollStatus(uid) {
+            try {
+                const r = await fetch(`http://127.0.0.1:8000/status/${uid}`);
+                const s = await r.json();
+                if (s.error) { appendUploadLine(uid, `<span style='color:#c00;'>Error: ${s.error}</span>`); return; }
+                if (s.stats_exists) {
+                    appendUploadLine(uid, 'Stats ready. Mapping to junction...');
+                    await mapUid(uid);
+                    appendUploadLine(uid, 'Mapped. Updating signal plan...');
+                    await fetchSignalPlan();
+                    await loadCurrentMappings();
+                    appendUploadLine(uid, 'Completed & included in optimization.');
+                } else {
+                    appendUploadLine(uid, 'Processing...');
+                    setTimeout(() => pollStatus(uid), 3000);
+                }
+            } catch (e) {
+                appendUploadLine(uid, `<span style='color:#c00;'>Status error: ${e.message}</span>`);
+            }
+        }
+
+        async function mapUid(uid) {
+            const info = activeUploads[uid];
+            if (!info) return;
+            const payload = {
+                uid: uid,
+                stats_path: info.statsPath,
+                junction: info.junction,
+                fps: 25
+            };
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/map_stats_to_junction', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!resp.ok) {
+                    const d = await resp.json();
+                    appendUploadLine(uid, `<span style='color:#c00;'>Mapping failed: ${d.error || resp.status}</span>`);
+                }
+            } catch (err) {
+                appendUploadLine(uid, `<span style='color:#c00;'>Mapping error: ${err.message}</span>`);
+            }
+        }
+
+        // Mapping Interface Functions
+        function showMappingInterface() {
+            document.getElementById('mappingInterface').style.display = 'block';
+            loadResultFiles();
+            loadCurrentMappings();
+        }
+
+        function hideMappingInterface() {
+            document.getElementById('mappingInterface').style.display = 'none';
+        }
+
+        async function loadCurrentMappings() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/list_mappings');
+                const data = await response.json();
+                
+                const container = document.getElementById('currentMappings');
+                
+                if (data.mappings && data.mappings.length > 0) {
+                    const table = document.createElement('table');
+                    table.style.width = '100%';
+                    table.style.borderCollapse = 'collapse';
+                    
+                    table.innerHTML = `
+                        <thead>
+                            <tr style="background: #e9ecef;">
+                                <th style="padding: 8px; border: 1px solid #ddd;">UID</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Junction</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Demand</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Stats File</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Last Updated</th>
+                                <th style="padding: 8px; border: 1px solid #ddd;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.mappings.map(m => {
+                                const demand = demandValues[m.junction] || 0;
+                                return `
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${m.uid}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${m.junction}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${demand.toFixed(1)} v/min</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; font-size: 0.9em;">${m.stats.split('/').pop()}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; font-size: 0.9em;">${new Date(m.last_updated * 1000).toLocaleString()}</td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">
+                                        <button onclick="deleteMapping('${m.uid}')" style="background: #dc3545; padding: 4px 8px; font-size: 0.8em;">Delete</button>
+                                    </td>
+                                </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    `;
+                    
+                    container.innerHTML = '';
+                    container.appendChild(table);
+                } else {
+                    container.innerHTML = '<p style="color: #666; font-style: italic;">No mappings created yet. Upload and process videos, then map them to junctions.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading mappings:', error);
+                document.getElementById('currentMappings').innerHTML = '<p style="color: #dc3545;">Error loading mappings</p>';
+            }
+        }
+
+        async function deleteMapping(uid) {
+            if (!confirm(`Are you sure you want to delete the mapping for UID: ${uid}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/delete_mapping/${uid}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Successfully deleted mapping for UID: ${uid}`);
+                    loadCurrentMappings(); // Refresh the mappings table
+                    fetchSignalPlan(); // Refresh the signal plan
+                } else {
+                    alert(`Error: ${result.error || 'Failed to delete mapping'}`);
+                }
+            } catch (error) {
+                console.error('Error deleting mapping:', error);
+                alert('Error deleting mapping. Please check if the backend is running.');
+            }
+        }
+
+        // ---------------- Live Analysis Feature ----------------
+        let liveActive = false;
+        let liveUid = null;
+        let livePollTimer = null;
+        let liveCancelled = false;
+
+        function showLiveAnalysisPanel() {
+            document.getElementById('liveAnalysisPanel').style.display = 'block';
+        }
+
+        // Extend existing controls: add button dynamically if not present
+        (function ensureLiveButton(){
+            const controls = document.querySelector('.controls');
+            if (!document.getElementById('liveBtn')) {
+                const btn = document.createElement('button');
+                btn.id = 'liveBtn';
+                btn.textContent = 'Live Analysis';
+                btn.onclick = showLiveAnalysisPanel;
+                controls.appendChild(btn);
+            }
+            if (!document.getElementById('rtPanelBtn')) {
+                const btn2 = document.createElement('button');
+                btn2.id = 'rtPanelBtn';
+                btn2.textContent = 'Real-Time Stream';
+                btn2.onclick = showRealTimePanel;
+                controls.appendChild(btn2);
+            }
+        })();
+
+        async function startLiveAnalysisUpload() {
+            if (liveActive) { return; }
+            const input = document.getElementById('liveVideoInput');
+            if (!input.files.length) { alert('Select a video first'); return; }
+            const file = input.files[0];
+            const form = new FormData();
+            form.append('file', file);
+            setLiveStatus(`Uploading <strong>${file.name}</strong> for progressive analysis...`);
+            document.getElementById('liveUploadBtn').disabled = true;
+            document.getElementById('liveCancelBtn').style.display = 'inline-block';
+            liveCancelled = false;
+            try {
+                liveActive = true;
+                // Use progressive upload endpoint
+                const resp = await fetch('http://127.0.0.1:8000/upload_progressive', { method: 'POST', body: form });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Upload failed');
+                liveUid = data.uid;
+                setLiveStatus(`Progressive processing started (uid=${liveUid}). Connecting for real-time updates...`);
+                
+                // Connect to WebSocket for progress updates
+                connectProgressWebSocket(liveUid);
+                
+                input.value = '';
+            } catch (err) {
+                setLiveStatus(`<span style='color:#c00;'>Error: ${err.message}</span>`);
+                resetLiveControls();
+            }
+        }
+
+        let progressSocket = null;
+        let progressFrameCount = 0;
+        let progressTotalFrames = 0;
+
+        function connectProgressWebSocket(uid) {
+            if (progressSocket) {
+                progressSocket.close();
+            }
+
+            const wsUrl = `ws://127.0.0.1:8000/ws/upload_progress/${uid}`;
+            progressSocket = new WebSocket(wsUrl);
+
+            progressSocket.onopen = () => {
+                console.log('Progress WebSocket connected');
+                setLiveStatus(`Connected. Processing will begin shortly...`);
+            };
+
+            progressSocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleProgressUpdate(data);
+                } catch (err) {
+                    console.error('Error parsing progress message:', err);
+                }
+            };
+
+            progressSocket.onerror = (error) => {
+                console.error('Progress WebSocket error:', error);
+                setLiveStatus(`<span style='color:#c00;'>Connection error. Falling back to polling...</span>`);
+                // Fallback to polling
+                setTimeout(() => pollLiveStatus(), 2000);
+            };
+
+            progressSocket.onclose = () => {
+                console.log('Progress WebSocket closed');
+                progressSocket = null;
+            };
+        }
+
+        function handleProgressUpdate(data) {
+            if (liveCancelled) return;
+
+            switch (data.type) {
+                case 'connection_established':
+                    setLiveStatus(`Connection established. Waiting for video processing to begin...`);
+                    break;
+
+                case 'frame_progress':
+                    progressFrameCount = data.frame_index;
+                    progressTotalFrames = data.total_frames;
+                    const percent = data.progress_percent.toFixed(1);
+                    const detectionCount = data.frame_data.detection_count;
+                    const totalVehicles = data.running_stats.total_vehicles;
+                    
+                    // Show live frame preview
+                    showLiveFramePreview();
+                    
+                    setLiveStatus(`
+                        Processing frame ${progressFrameCount}/${progressTotalFrames} (${percent}%)<br>
+                        <div style="background:#e7f3ff; padding:8px; margin:8px 0; border-radius:4px;">
+                            <strong>Current Frame:</strong> ${detectionCount} detections<br>
+                            <strong>Total So Far:</strong> ${totalVehicles} vehicles detected
+                        </div>
+                        <div style="background:#f0f0f0; height:8px; border-radius:4px; overflow:hidden;">
+                            <div style="background:#007bff; height:100%; width:${percent}%; transition:width 0.3s;"></div>
+                        </div>
+                    `);
+
+                    // Update live frame info
+                    updateLiveFrameInfo(data.frame_data);
+                    
+                    // Update live stats progressively
+                    updateProgressiveStats(data.running_stats);
+                    break;
+
+                case 'processing_complete':
+                    setLiveStatus('Processing complete! Loading final results...');
+                    hideLiveFramePreview();
+                    // Load final video and stats
+                    setTimeout(() => loadLiveStatsAndVideo(), 1000);
+                    resetLiveControls();
+                    if (progressSocket) {
+                        progressSocket.close();
+                    }
+                    break;
+
+                case 'processing_error':
+                    setLiveStatus(`<span style='color:#c00;'>Processing error: ${data.error}</span>`);
+                    hideLiveFramePreview();
+                    resetLiveControls();
+                    if (progressSocket) {
+                        progressSocket.close();
+                    }
+                    break;
+            }
+        }
+
+        function showLiveFramePreview() {
+            document.getElementById('liveFramePreview').style.display = 'block';
+        }
+
+        function hideLiveFramePreview() {
+            document.getElementById('liveFramePreview').style.display = 'none';
+        }
+
+        function updateLiveFrameInfo(frameData) {
+            const infoDiv = document.getElementById('liveFrameInfo');
+            const timestamp = frameData.timestamp.toFixed(2);
+            const detections = frameData.detections;
+            
+            let infoText = `Frame ${frameData.frame_index} (${timestamp}s): ${detections.length} detections`;
+            
+            if (detections.length > 0) {
+                const classes = detections.map(d => d.class);
+                const classCount = {};
+                classes.forEach(c => classCount[c] = (classCount[c] || 0) + 1);
+                
+                const classStr = Object.entries(classCount)
+                    .map(([cls, count]) => `${count} ${cls}`)
+                    .join(', ');
+                infoText += ` (${classStr})`;
+            }
+            
+            infoDiv.textContent = infoText;
+            
+            // Draw simple visualization on canvas
+            drawFrameVisualization(frameData);
+        }
+
+        function drawFrameVisualization(frameData) {
+            const canvas = document.getElementById('liveFrameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw placeholder background
+            ctx.fillStyle = '#333';
+            ctx.fillRect(10, 10, canvas.width - 20, canvas.height - 20);
+            
+            // Draw detections as colored rectangles (simplified visualization)
+            const detections = frameData.detections;
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+            
+            detections.forEach((detection, index) => {
+                const [x1, y1, x2, y2] = detection.bbox;
+                
+                // Scale bbox to canvas size (assuming video is roughly 16:9)
+                const scaleX = (canvas.width - 20) / 1920; // Assume 1920 width
+                const scaleY = (canvas.height - 20) / 1080; // Assume 1080 height
+                
+                const rectX = 10 + x1 * scaleX;
+                const rectY = 10 + y1 * scaleY;
+                const rectW = (x2 - x1) * scaleX;
+                const rectH = (y2 - y1) * scaleY;
+                
+                // Draw bounding box
+                ctx.strokeStyle = colors[index % colors.length];
+                ctx.lineWidth = 2;
+                ctx.strokeRect(rectX, rectY, rectW, rectH);
+                
+                // Draw class label
+                ctx.fillStyle = colors[index % colors.length];
+                ctx.font = '12px Arial';
+                ctx.fillText(detection.class, rectX, rectY - 2);
+            });
+            
+            // Draw frame info
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px Arial';
+            ctx.fillText(`Frame ${frameData.frame_index}`, 15, canvas.height - 10);
+        }
+
+        function updateProgressiveStats(runningStats) {
+            const statsDiv = document.getElementById('liveStats');
+            
+            let statsHtml = `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:0.9em;">
+                    <div><strong>Total Vehicles:</strong> ${runningStats.total_vehicles}</div>
+                    <div><strong>Rate:</strong> ${runningStats.vehicles_per_minute.toFixed(1)} veh/min</div>
+                </div>
+            `;
+
+            if (Object.keys(runningStats.class_counts).length > 0) {
+                statsHtml += '<div style="margin-top:10px;"><strong>By Class:</strong><ul style="margin:5px 0 0 20px; padding:0;">';
+                for (const [className, count] of Object.entries(runningStats.class_counts)) {
+                    statsHtml += `<li>${className}: ${count}</li>`;
+                }
+                statsHtml += '</ul></div>';
+            }
+
+            statsDiv.innerHTML = statsHtml;
+        }
+
+        function cancelLiveAnalysis() {
+            if (!liveActive) return;
+            liveCancelled = true;
+            
+            // Cancel via WebSocket if connected
+            if (progressSocket && progressSocket.readyState === WebSocket.OPEN) {
+                progressSocket.send(JSON.stringify({
+                    type: 'cancel_processing'
+                }));
+                progressSocket.close();
+            }
+            
+            if (livePollTimer) clearTimeout(livePollTimer);
+            setLiveStatus('<span style="color:#c00;">Cancelled by user.</span>');
+            resetLiveControls();
+        }
+
+        function resetLiveControls() {
+            liveActive = false;
+            liveUid = null;
+            progressFrameCount = 0;
+            progressTotalFrames = 0;
+            
+            // Clean up WebSocket connection
+            if (progressSocket) {
+                progressSocket.close();
+                progressSocket = null;
+            }
+            
+            // Hide live frame preview
+            hideLiveFramePreview();
+            
+            document.getElementById('liveUploadBtn').disabled = false;
+            document.getElementById('liveCancelBtn').style.display = 'none';
+        }
+
+        function setLiveStatus(html) {
+            document.getElementById('liveStatus').innerHTML = html;
+        }
+
+        async function pollLiveStatus() {
+            if (!liveUid || liveCancelled) return;
+            try {
+                const r = await fetch(`http://127.0.0.1:8000/status/${liveUid}`);
+                const s = await r.json();
+                if (s.error) { setLiveStatus(`<span style='color:#c00;'>Error: ${s.error}</span>`); resetLiveControls(); return; }
+                if (s.stats_exists) {
+                    setLiveStatus('Stats ready. Fetching & loading annotated video...');
+                    await loadLiveStatsAndVideo();
+                    setLiveStatus('Completed. You can map this run from the Mappings panel if desired.');
+                    resetLiveControls();
+                } else {
+                    setLiveStatus(`Processing... <span style='color:#666;'>${new Date().toLocaleTimeString()}</span>`);
+                    livePollTimer = setTimeout(pollLiveStatus, 3000);
+                }
+            } catch (e) {
+                setLiveStatus(`<span style='color:#c00;'>Status error: ${e.message}</span>`);
+                livePollTimer = setTimeout(pollLiveStatus, 5000);
+            }
+        }
+
+        async function loadLiveStatsAndVideo() {
+            if (!liveUid) return;
+            // Attempt to load video
+            const videoEl = document.getElementById('liveAnnotatedVideo');
+            const annotatedUrl = `http://127.0.0.1:8000/results/${liveUid}_annotated.mp4`;
+            // Set video src optimistically; onerror fallback
+            videoEl.src = annotatedUrl;
+            videoEl.onerror = () => {
+                document.getElementById('liveVideoNote').textContent = 'Annotated video not found yet (maybe still writing). Try again shortly.';
+            };
+            // Fetch stats JSON
+            try {
+                const statsResp = await fetch(`http://127.0.0.1:8000/results/${liveUid}_stats.json`);
+                if (statsResp.ok) {
+                    const statsJson = await statsResp.json();
+                    renderLiveStats(statsJson);
+                } else {
+                    document.getElementById('liveStats').innerHTML = '<span style="color:#c00;">Stats file not accessible.</span>';
+                }
+            } catch (err) {
+                document.getElementById('liveStats').innerHTML = `<span style='color:#c00;'>Error reading stats: ${err.message}</span>`;
+            }
+        }
+
+        function renderLiveStats(stats) {
+            if (!stats) { document.getElementById('liveStats').innerHTML = '<em>No stats available.</em>'; return; }
+            // Extract summary
+            const summary = stats.summary || {};
+            const totalFrames = summary.total_frames || (stats.per_frame_counts ? stats.per_frame_counts.length : 0);
+            const totalVehicles = summary.total_vehicles_detected || 0;
+            const perFrame = stats.per_frame_counts || [];
+            const avgPerFrame = perFrame.length ? (totalVehicles / perFrame.length).toFixed(2) : '0';
+            // Build per-class aggregate
+            const classTotals = {};
+            perFrame.forEach(f => {
+                Object.entries(f.counts || {}).forEach(([cls, cnt]) => {
+                    classTotals[cls] = Math.max(classTotals[cls] || 0, cnt); // using max seen concurrently
+                });
+            });
+            const flow = (stats.flow_windows && stats.flow_windows.length) ? stats.flow_windows[0].vehicles_per_minute : null;
+            const classList = Object.keys(classTotals).length ? Object.entries(classTotals).map(([k,v]) => `${k}: ${v}`).join(', ') : 'N/A';
+            document.getElementById('liveStats').innerHTML = `
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:10px;">
+                    <div><strong>Total Frames:</strong> ${totalFrames}</div>
+                    <div><strong>Total Vehicles:</strong> ${totalVehicles}</div>
+                    <div><strong>Avg / Frame:</strong> ${avgPerFrame}</div>
+                    <div><strong>Peak Flow Window:</strong> ${flow !== null ? flow.toFixed(1)+' v/min' : 'N/A'}</div>
+                    <div style="grid-column:1 / -1;"><strong>Max Concurrent Counts (by class):</strong> ${classList}</div>
+                </div>`;
+            renderLiveCountsChart(perFrame);
+        }
+
+        function renderLiveCountsChart(perFrame) {
+            const canvas = document.getElementById('liveCountsChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            if (!perFrame || !perFrame.length) {
+                ctx.fillStyle = '#666';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No frame data', canvas.width/2, canvas.height/2);
+                return;
+            }
+            // Aggregate total concurrent vehicles per frame (sum of counts values)
+            const totals = perFrame.map(f => Object.values(f.counts||{}).reduce((a,b)=>a+b,0));
+            const maxVal = Math.max(...totals);
+            // Draw axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(30,10);
+            ctx.lineTo(30,110);
+            ctx.lineTo(canvas.width-10,110);
+            ctx.stroke();
+            // Line plot
+            ctx.strokeStyle = '#007bff';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            totals.forEach((val, idx) => {
+                const x = 30 + (idx/(totals.length-1))*(canvas.width-40);
+                const y = 110 - (val/(maxVal||1))*90;
+                if (idx===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            });
+            ctx.stroke();
+            // Optional sparse points (every ~10 or first/last)
+            ctx.fillStyle = '#007bff';
+            totals.forEach((val, idx) => {
+                if (idx===0 || idx===totals.length-1 || idx % Math.ceil(totals.length/10)===0) {
+                    const x = 30 + (idx/(totals.length-1))*(canvas.width-40);
+                    const y = 110 - (val/(maxVal||1))*90;
+                    ctx.beginPath();
+                    ctx.arc(x,y,2,0,2*Math.PI);
+                    ctx.fill();
+                }
+            });
+            // Labels
+            ctx.fillStyle = '#333';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'right';
+            for (let i=0;i<=3;i++) {
+                const y = 110 - (i/3)*90;
+                const v = (i/3)*(maxVal||1);
+                ctx.fillText(Math.round(v),25,y+3);
+            }
+            ctx.textAlign = 'center';
+            ctx.fillText('Frame Index', canvas.width/2, 125);
+        }
+
+        // Expose show function if needed externally
+        window.showLiveAnalysisPanel = showLiveAnalysisPanel;
+        
+        // ---------------- Real-Time Stream Frontend ----------------
+        let rtWs = null;
+        let rtActive = false;
+        let rtCountsHistory = [];
+        const RT_HISTORY_MAX = 120; // store last ~60s if 0.5s interval
+        let rtOptimizerTimer = null;
+        let lastLiveDemand = 0;
+
+        function showRealTimePanel(){
+            document.getElementById('realTimePanel').style.display='block';
+        }
+
+        async function startRealTimeStream(){
+            if (rtActive) return;
+            const confidence = parseFloat(document.getElementById('rtConfidence').value)||0.35;
+            const performance = document.getElementById('rtPerformance').value;
+            
+            // Performance presets
+            let frameSkip = 1, resizeWidth = 640, maxFps = 10;
+            if (performance === 'fast') { frameSkip = 2; resizeWidth = 320; maxFps = 15; }
+            else if (performance === 'quality') { frameSkip = 1; resizeWidth = 1280; maxFps = 8; }
+            
+            setRtStatus('Starting stream...');
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/start_stream',{
+                    method:'POST', 
+                    headers:{'Content-Type':'application/json'}, 
+                    body: JSON.stringify({
+                        source:0, 
+                        confidence, 
+                        max_fps: maxFps,
+                        frame_skip: frameSkip,
+                        resize_width: resizeWidth
+                    })
+                });
+                const data = await resp.json();
+                if(!resp.ok){ throw new Error(data.error||'Failed'); }
+                setRtStatus('Stream started. Connecting WebSocket & MJPEG...');
+                document.getElementById('rtStartBtn').style.display='none';
+                document.getElementById('rtStopBtn').style.display='inline-block';
+                rtActive = true;
+                // Set MJPEG image
+                document.getElementById('rtImage').src = 'http://127.0.0.1:8000/stream/mjpeg?cacheBust='+Date.now();
+                openRtWebSocket();
+            } catch(e){
+                setRtStatus('<span style="color:#c00;">Error: '+e.message+'</span>');
+            }
+        }
+
+        async function stopRealTimeStream(){
+            if (!rtActive) return;
+            try { await fetch('http://127.0.0.1:8000/stop_stream', {method:'POST'}); } catch(e){}
+            if (rtWs){ rtWs.close(); rtWs=null; }
+            if (rtOptimizerTimer) { clearInterval(rtOptimizerTimer); rtOptimizerTimer=null; }
+            rtActive = false;
+            document.getElementById('rtStartBtn').style.display='inline-block';
+            document.getElementById('rtStopBtn').style.display='none';
+            setRtStatus('<em>Stream stopped.</em>');
+        }
+
+        function setRtStatus(html){ document.getElementById('rtStatus').innerHTML = html; }
+
+        function openRtWebSocket(){
+            try {
+                rtWs = new WebSocket('ws://127.0.0.1:8000/ws/live');
+                rtWs.onopen = () => {
+                    setRtStatus('Live stream active. Receiving data...');
+                    // Start periodic optimizer updates if junction selected
+                    const junction = document.getElementById('rtJunction').value;
+                    if (junction) {
+                        rtOptimizerTimer = setInterval(updateLiveOptimizer, 15000); // every 15s
+                        setRtStatus('Live stream active + optimizer updates for ' + junction);
+                    }
+                };
+                rtWs.onmessage = (ev)=>{
+                    try{
+                        const msg = JSON.parse(ev.data);
+                        if(msg.type==='live_stats') { updateRtStats(msg); }
+                        else if(msg.error) { setRtStatus('<span style="color:#c00;">'+msg.error+'</span>'); }
+                    }catch(e){/* ignore */}
+                };
+                rtWs.onerror = ()=> setRtStatus('<span style="color:#c00;">WebSocket error</span>');
+                rtWs.onclose = ()=> { if(rtActive){ setRtStatus('<span style="color:#c00;">WebSocket closed</span>'); } };
+            } catch(e){ setRtStatus('<span style="color:#c00;">WS init failed: '+e.message+'</span>'); }
+        }
+
+        function updateRtStats(msg){
+            // Maintain counts history
+            rtCountsHistory.push(msg.total_vehicles_frame||0);
+            if (rtCountsHistory.length > RT_HISTORY_MAX) rtCountsHistory = rtCountsHistory.slice(-RT_HISTORY_MAX);
+            lastLiveDemand = msg.vehicles_per_minute || 0;
+            document.getElementById('rtStats').innerHTML = `
+                Frame: ${msg.frame || '-'} (proc: ${msg.processed_frame || '-'})<br>
+                Vehicles (frame): ${msg.total_vehicles_frame ?? '-'}<br>
+                Recent Frames: ${msg.recent_total_frames ?? 0}<br>
+                Recent Vehicles: ${msg.recent_total_vehicles ?? 0}<br>
+                Avg / Frame: ${(msg.avg_vehicles_per_frame||0).toFixed(2)}<br>
+                Vehicles / Min (est): ${(msg.vehicles_per_minute||0).toFixed(1)}<br>
+                <small>Skip: ${msg.frame_skip_ratio || '1:1'}, Inf FPS: ${(msg.performance?.inference_fps||0).toFixed(1)}</small>
+            `;
+            drawRtSpark();
+        }
+
+        function drawRtSpark(){
+            const canvas = document.getElementById('rtSpark');
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            if(!rtCountsHistory.length){
+                ctx.fillStyle='#666'; ctx.font='12px Arial'; ctx.textAlign='center'; ctx.fillText('No data', canvas.width/2, canvas.height/2); return; }
+            const max = Math.max(...rtCountsHistory);
+            ctx.strokeStyle='#28a745'; ctx.lineWidth=1.5; ctx.beginPath();
+            rtCountsHistory.forEach((v,i)=>{
+                const x = (i/(rtCountsHistory.length-1))*(canvas.width-10)+5;
+                const y = canvas.height-5 - (v/(max||1))*(canvas.height-15);
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            });
+            ctx.stroke();
+            ctx.strokeStyle='#ccc'; ctx.beginPath(); ctx.moveTo(5,canvas.height-5); ctx.lineTo(canvas.width-5,canvas.height-5); ctx.stroke();
+        }
+
+        async function updateLiveOptimizer(){
+            const junction = document.getElementById('rtJunction').value;
+            if (!junction || !rtActive || lastLiveDemand <= 0) return;
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/update_live_demand', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({junction, demand: lastLiveDemand})
+                });
+                if (resp.ok) {
+                    // Trigger signal plan refresh
+                    fetchSignalPlan();
+                }
+            } catch(e) {
+                console.warn('Live optimizer update failed:', e);
+            }
+        }
+    </script>
+</body>
+</html>

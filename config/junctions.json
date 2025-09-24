@@ -1,0 +1,10 @@
+{
+  "junctions": [
+    {"id": "J1", "x": 100, "y": 200, "neighbors": [{"to": "J2", "distance": 500}, {"to": "J3", "distance": 700}]},
+    {"id": "J2", "x": 300, "y": 200, "neighbors": [{"to": "J1", "distance": 500}, {"to": "J4", "distance": 600}]},
+    {"id": "J3", "x": 100, "y": 400, "neighbors": [{"to": "J1", "distance": 700}, {"to": "J5", "distance": 450}]},
+    {"id": "J4", "x": 500, "y": 200, "neighbors": [{"to": "J2", "distance": 600}, {"to": "J6", "distance": 800}]},
+    {"id": "J5", "x": 100, "y": 600, "neighbors": [{"to": "J3", "distance": 450}, {"to": "J6", "distance": 700}]},
+    {"id": "J6", "x": 500, "y": 600, "neighbors": [{"to": "J4", "distance": 800}, {"to": "J5", "distance": 700}]}
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "mappings": [
+    {
+      "uid": "01de4e83",
+      "stats": "C:\\Project\\Guardianeye\\backend\\results\\01de4e83_stats.json",
+      "junction": "J1",
+      "fps": 25,
+      "last_updated": 1758397156.278182
+    },
+    {
+      "uid": "7b3d2a15",
+      "stats": "C:\\Project\\Guardianeye\\backend\\results\\7b3d2a15_stats.json",
+      "junction": "J1",
+      "fps": 25,
+      "last_updated": 1758397357.4101858
+    },
+    {
+      "uid": "bfb04b85",
+      "stats": "C:\\Project\\Guardianeye\\backend\\results\\bfb04b85_stats.json",
+      "junction": "J2",
+      "fps": 25,
+      "last_updated": 1758397409.094705
+    },
+    {
+      "uid": "b08ae548",
+      "stats": "C:\\Project\\Guardianeye\\backend\\results\\b08ae548_stats.json",
+      "junction": "J3",
+      "fps": 25,
+      "last_updated": 1758397464.9715693
+    },
+    {
+      "uid": "14af4add",
+      "stats": "C:\\Project\\Guardianeye\\backend\\results\\14af4add_stats.json",
+      "junction": "J4",
+      "fps": 25,
+      "last_updated": 1758397529.7835357
+    },
+    {
+      "uid": "8b60ed52",
+      "stats": "C:\\Project\\Guardianeye\\backend\\results\\8b60ed52_stats.json",
+      "junction": "J1",
+      "fps": 25,
+      "last_updated": 1758400131.2818735
+    }
+  ]
+}
